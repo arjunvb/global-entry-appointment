@@ -17,9 +17,11 @@ driver = webdriver.Chrome(executable_path=os.path.abspath("chromedriver"), optio
 driver.get("https://ttp.cbp.dhs.gov/schedulerui/schedule-interview/location?lang=en&vo=true&service=UP")
 time.sleep(2)
 
-SFO = 'US34'
-BOS = 'US190'
-#ANC = 'US10' # anchorage usually has free slots, so this is a test that the script still works.
+airports = {
+    'SFO': 'US34',
+    'BOS': 'US190',
+    'ANC': 'US10',
+}
 center_id_prefix = "centerDetails"
 
 def check_loc(loc):
@@ -42,15 +44,38 @@ def check_loc(loc):
     else:
         raise Exception("Unexpected formatting")
 
-print('checking SFO')
-sfo = check_loc(SFO)
-print(sfo)
-print('checking BOS')
-bos = check_loc(BOS)
-print(bos)
+import argparse
 
-if sfo != None or bos != None:
+parser = argparse.ArgumentParser("Global Entry")
+parser.add_argument(
+    "--airport_list",
+    nargs="+",
+    help="List of airport codes",
+    required=True,
+)
+parser.add_argument(
+    "--email_list",
+    nargs="+",
+    help="List of emails",
+    required=True,
+)
+args = parser.parse_args()
+
+airport_keys = airports.keys()
+avail = {k: None for k in airport_keys}
+
+found = False
+for code in args.airport_list:
+    result = check_loc(airports[code])
+    avail[code] = result
+    found = (not found) and (result != None)
+
+if found:
     print("sending email")
-    subprocess.run(f'echo "sfo: {sfo} bos: {bos}" | mutt -s "TTP Appointment" -- {sys.argv[1]}', shell=True)
+    out_str = ""
+    for code in args.airport_list:
+        out_str += f"{code}:\n{avail[code]}\n\n"
+    email_str = ', '.join(args.email_list)
+    subprocess.run(f'echo "{out_str}" | mutt -s "Global Entry Appointment" -- {email_str}', shell=True)
 
 driver.quit()
